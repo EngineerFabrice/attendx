@@ -1,0 +1,27 @@
+const router = require('express').Router()
+const ctrl   = require('../controllers/admin.controller')
+const { authenticate, requireRole } = require('../middleware/auth')
+
+router.use(authenticate, requireRole('admin'))
+
+// Users
+router.get   ('/users',              ctrl.getUsers)
+router.post  ('/users',              ctrl.createUser)
+router.post  ('/users/bulk',         ctrl.bulkCreateUsers)
+router.put   ('/users/:id',          ctrl.updateUser)
+router.delete('/users/:id',          ctrl.deleteUser)
+
+// Courses
+router.get   ('/courses',            ctrl.getCourses)
+router.post  ('/courses',            ctrl.createCourse)
+router.put   ('/courses/:id',        ctrl.updateCourse)
+
+// Classrooms
+router.get   ('/classrooms',         ctrl.getClassrooms)
+router.post  ('/classrooms',         ctrl.createClassroom)
+router.delete('/classrooms/:id',     ctrl.deleteClassroom)
+
+// Analytics
+router.get   ('/analytics',          ctrl.getAnalytics)
+
+module.exports = router

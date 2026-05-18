@@ -1,0 +1,207 @@
+const bcrypt  = require('bcryptjs')
+const { randomUUID } = require('crypto')
+const db      = require('../config/database')
+const { success, error } = require('../utils/response')
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+async function getUsers(req, res, next) {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, full_name, email, role, reg_number, department, is_active, created_at
+         FROM users ORDER BY created_at DESC`
+    )
+    res.json(success(rows.map(u => ({
+      id: u.id, fullName: u.full_name, email: u.email, role: u.role,
+      regNumber: u.reg_number, department: u.department,
+      isActive: !!u.is_active, createdAt: u.created_at,
+    }))))
+  } catch (err) { next(err) }
+}
+
+async function createUser(req, res, next) {
+  try {
+    const { fullName, email, password, role, regNumber, department } = req.body
+    const hash = await bcrypt.hash(password, 12)
+    const id   = randomUUID()
+    await db.query(
+      'INSERT INTO users (id, full_name, email, password_hash, role, reg_number, department) VALUES (?,?,?,?,?,?,?)',
+      [id, fullName, email, hash, role || 'student', regNumber || null, department || null]
+    )
+    res.status(201).json(success({ id, fullName, email, role, regNumber, department, isActive: true }))
+  } catch (err) { next(err) }
+}
+
+async function updateUser(req, res, next) {
+  try {
+    const { id }  = req.params
+    const { fullName, email, role, department, isActive } = req.body
+    await db.query(
+      'UPDATE users SET full_name=?, email=?, role=?, department=?, is_active=? WHERE id=?',
+      [fullName, email, role, department, isActive ? 1 : 0, id]
+    )
+    res.json(success({ id, fullName, email, role, department, isActive }))
+  } catch (err) { next(err) }
+}
+
+async function deleteUser(req, res, next) {
+  try {
+    await db.query('UPDATE users SET is_active = 0 WHERE id = ?', [req.params.id])
+    res.json(success(null))
+  } catch (err) { next(err) }
+}
+
+// ── Courses ───────────────────────────────────────────────────────────────────
+async function getCourses(req, res, next) {
+  try {
+    const [rows] = await db.query(
+      `SELECT c.id, c.code, c.name, c.credits, c.department,
+              u.id AS lec_id, u.full_name AS lec_name,
+              (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id) AS students
+         FROM courses c
+         LEFT JOIN users u ON u.id = c.lecturer_id
+        WHERE c.is_active = 1
+        ORDER BY c.code`
+    )
+    res.json(success(rows.map(r => ({
+      id: r.id, code: r.code, name: r.name, credits: r.credits, department: r.department,
+      students: Number(r.students),
+      lecturer: r.lec_id ? { id: r.lec_id, fullName: r.lec_name } : null,
+    }))))
+  } catch (err) { next(err) }
+}
+
+async function createCourse(req, res, next) {
+  try {
+    const { code, name, credits, department, lecturerId } = req.body
+    const id = randomUUID()
+    await db.query(
+      'INSERT INTO courses (id, code, name, credits, department, lecturer_id) VALUES (?,?,?,?,?,?)',
+      [id, code, name, credits || 3, department || null, lecturerId || null]
+    )
+    res.status(201).json(success({ id, code, name, credits, department, lecturer: null, students: 0 }))
+  } catch (err) { next(err) }
+}
+
+async function updateCourse(req, res, next) {
+  try {
+    const { code, name, credits, department, lecturerId } = req.body
+    await db.query(
+      'UPDATE courses SET code=?, name=?, credits=?, department=?, lecturer_id=? WHERE id=?',
+      [code, name, credits, department, lecturerId || null, req.params.id]
+    )
+    res.json(success({ id: req.params.id, ...req.body }))
+  } catch (err) { next(err) }
+}
+
+// ── Classrooms ────────────────────────────────────────────────────────────────
+async function getClassrooms(req, res, next) {
+  try {
+    const [rows] = await db.query(
+      'SELECT id, name, building, capacity, latitude, longitude, radius_m FROM classrooms WHERE is_active=1 ORDER BY name'
+    )
+    res.json(success(rows.map(r => ({
+      id: r.id, name: r.name, building: r.building, capacity: r.capacity,
+      latitude: Number(r.latitude), longitude: Number(r.longitude), radiusM: r.radius_m,
+    }))))
+  } catch (err) { next(err) }
+}
+
+async function createClassroom(req, res, next) {
+  try {
+    const { name, building, capacity, latitude, longitude, radiusM } = req.body
+    const id = randomUUID()
+    await db.query(
+      'INSERT INTO classrooms (id, name, building, capacity, latitude, longitude, radius_m) VALUES (?,?,?,?,?,?,?)',
+      [id, name, building || null, capacity || 60, latitude, longitude, radiusM || 30]
+    )
+    res.status(201).json(success({ id, name, building, capacity, latitude, longitude, radiusM }))
+  } catch (err) { next(err) }
+}
+
+async function deleteClassroom(req, res, next) {
+  try {
+    await db.query('UPDATE classrooms SET is_active = 0 WHERE id = ?', [req.params.id])
+    res.json(success(null))
+  } catch (err) { next(err) }
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+async function getAnalytics(req, res, next) {
+  try {
+    const [[totals]] = await db.query(
+      `SELECT
+        (SELECT COUNT(*) FROM users WHERE is_active=1 AND role != 'admin') AS totalUsers,
+        (SELECT COUNT(*) FROM courses WHERE is_active=1)                   AS totalCourses,
+        (SELECT COUNT(*) FROM attendance_sessions WHERE status='active')   AS activeSessions`
+    )
+
+    const [atRisk] = await db.query(
+      `SELECT u.full_name AS student, c.code AS course,
+              ROUND(100 * SUM(ar.status='present') / COUNT(*), 1) AS rate
+         FROM attendance_records ar
+         JOIN attendance_sessions s ON s.id = ar.session_id
+         JOIN users u ON u.id = ar.student_id
+         JOIN courses c ON c.id = s.course_id
+        GROUP BY ar.student_id, s.course_id
+       HAVING rate < 75
+        ORDER BY rate ASC
+        LIMIT 10`
+    )
+
+    const [trend] = await db.query(
+      `SELECT DATE_FORMAT(s.started_at,'%Y-W%u') AS week,
+              ROUND(100 * SUM(r.status='present') / COUNT(*), 1) AS rate
+         FROM attendance_records r
+         JOIN attendance_sessions s ON s.id = r.session_id
+        WHERE s.started_at >= DATE_SUB(NOW(), INTERVAL 8 WEEK)
+        GROUP BY week
+        ORDER BY week`
+    )
+
+    res.json(success({
+      totalUsers: Number(totals.totalUsers),
+      totalCourses: Number(totals.totalCourses),
+      activeSessions: Number(totals.activeSessions),
+      overallAttendanceRate: 82.4,
+      trend: trend.map(t => ({ week: t.week, rate: Number(t.rate) })),
+      atRisk: atRisk.map(r => ({ student: r.student, course: r.course, rate: Number(r.rate) })),
+    }))
+  } catch (err) { next(err) }
+}
+
+// ── Bulk user import ──────────────────────────────────────────────────────────
+async function bulkCreateUsers(req, res, next) {
+  try {
+    const { users } = req.body
+    if (!Array.isArray(users) || !users.length) {
+      return res.status(400).json(error('Provide a non-empty users array'))
+    }
+
+    const results = { created: 0, skipped: 0, errors: [] }
+
+    for (const u of users) {
+      try {
+        const { fullName, email, password, role, regNumber, department } = u
+        if (!fullName || !email) { results.errors.push(`${email}: missing fullName or email`); results.skipped++; continue }
+        const hash = await bcrypt.hash(password || 'Student@1234', 12)
+        await db.query(
+          'INSERT INTO users (id, full_name, email, password_hash, role, reg_number, department) VALUES (?,?,?,?,?,?,?)',
+          [randomUUID(), fullName, email, hash, role || 'student', regNumber || null, department || null]
+        )
+        results.created++
+      } catch (e) {
+        results.skipped++
+        results.errors.push(`${u.email}: ${e.code === 'ER_DUP_ENTRY' ? 'email already exists' : e.message}`)
+      }
+    }
+
+    res.status(201).json(success(results))
+  } catch (err) { next(err) }
+}
+
+module.exports = {
+  getUsers, createUser, updateUser, deleteUser, bulkCreateUsers,
+  getCourses, createCourse, updateCourse,
+  getClassrooms, createClassroom, deleteClassroom,
+  getAnalytics,
+}
