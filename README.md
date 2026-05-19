@@ -1,9 +1,14 @@
 # AttendX - Smart Hybrid Attendance Management System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Flutter](https://img.shields.io/badge/Flutter-3.22+-blue.svg)](https://flutter.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org)
-[![MySQL](https://img.shields.io/badge/MySQL-8.0.45-blue.svg)](https://mysql.com)
+[![Express.js](https://img.shields.io/badge/Express.js-4.x-lightgrey.svg)](https://expressjs.com)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)](https://mysql.com)
+[![React](https://img.shields.io/badge/React-18.x-61dafb.svg)](https://reactjs.org)
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B.svg)](https://flutter.dev)
+[![Twilio](https://img.shields.io/badge/Twilio-SMS-red.svg)](https://twilio.com)
+[![Firebase](https://img.shields.io/badge/Firebase-FCM-orange.svg)](https://firebase.google.com)
+[![Socket.io](https://img.shields.io/badge/Socket.io-4.x-black.svg)](https://socket.io)
+[![JWT](https://img.shields.io/badge/JWT-Auth-yellow.svg)](https://jwt.io)
 
 > A secure, real-time, and inclusive attendance system with geolocation verification, session-based codes, and hybrid submission methods (mobile app, SMS, offline sync).
 
