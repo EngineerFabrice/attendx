@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, AlertTriangle, Bell, Loader2 } from "lucide-react";
+import { Download, AlertTriangle, Bell, Loader2, Smartphone, MessageCircle } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -17,6 +17,9 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [sendingWarning, setSendingWarning] = useState(null);
   const [sendingBulk, setSendingBulk] = useState(false);
+  const [sendMethod, setSendMethod] = useState("both"); // 'push', 'sms', 'both'
+  const [showMethodSelector, setShowMethodSelector] = useState(false);
+
   useEffect(() => {
     Promise.all([api.get("/lecturer/students"), api.get("/lecturer/sessions")])
       .then(([s, sess]) => {
@@ -58,7 +61,7 @@ export default function Reports() {
             attendanceRate:
               student.attendanceRate || student.attendance_rate || 0,
             email: student.email,
-            phone: student.phone,
+            phone: student.phone || student.phone_number,
           };
         });
 
@@ -75,6 +78,7 @@ export default function Reports() {
 
   const handleSendWarning = async (student) => {
     console.log("Student data being sent:", student);
+    console.log("Send method:", sendMethod);
 
     try {
       setSendingWarning(student.id);
@@ -102,20 +106,49 @@ export default function Reports() {
         return;
       }
 
+      // Check if SMS is selected but student has no phone number
+      if ((sendMethod === "sms" || sendMethod === "both") && !student.phone) {
+        alert(
+          `Cannot send SMS to ${student.fullName}: No phone number registered. Please update student's contact info.`,
+        );
+        setSendingWarning(null);
+        return;
+      }
+
       const response = await api.post("/notifications/send-warning", {
         studentId: student.id,
         studentName: student.fullName,
         attendanceRate: student.attendanceRate,
         courseName: student.course,
+        sendMethod: sendMethod, // Include notification method
+        phoneNumber: student.phone, // Include phone for SMS
       });
 
       if (response.data.success) {
-        alert(`⚠️ Warning sent to ${student.fullName}`);
+        const methodText = 
+          sendMethod === "push" ? "Push notification" :
+          sendMethod === "sms" ? "SMS" : "Push + SMS";
+        
+        alert(`✅ ${methodText} warning sent to ${student.fullName}`);
+        
+        // Show additional info if SMS was attempted
+        if (response.data.smsSent !== undefined) {
+          if (response.data.smsSent) {
+            console.log(`SMS sent to ${student.phone}`);
+          } else if (sendMethod !== "push") {
+            alert(`Note: SMS could not be sent. Student may not have a valid phone number.`);
+          }
+        }
 
         setStudents((prevStudents) =>
           prevStudents.map((s) =>
             s.id === student.id
-              ? { ...s, warningSent: true, lastWarningSent: new Date() }
+              ? { 
+                  ...s, 
+                  warningSent: true, 
+                  lastWarningSent: new Date(),
+                  lastWarningMethod: sendMethod 
+                }
               : s,
           ),
         );
@@ -132,14 +165,34 @@ export default function Reports() {
 
   const handleSendBulkWarnings = async () => {
     const atRiskStudents = students.filter((s) => s.attendanceRate < 75);
+    
+    // Filter by SMS capability if needed
+    let studentsToNotify = atRiskStudents;
+    if (sendMethod === "sms") {
+      studentsToNotify = atRiskStudents.filter(s => s.phone);
+      if (studentsToNotify.length === 0) {
+        alert("No at-risk students have phone numbers registered for SMS");
+        return;
+      }
+      if (studentsToNotify.length < atRiskStudents.length) {
+        const skipped = atRiskStudents.length - studentsToNotify.length;
+        if (!confirm(`${studentsToNotify.length} students have phone numbers. ${skipped} students without phone numbers will be skipped. Continue?`)) {
+          return;
+        }
+      }
+    }
 
-    if (atRiskStudents.length === 0) {
+    if (studentsToNotify.length === 0) {
       alert("No at-risk students found");
       return;
     }
 
+    const methodText = 
+      sendMethod === "push" ? "push notifications" :
+      sendMethod === "sms" ? "SMS messages" : "push notifications and SMS";
+
     if (
-      !confirm(`Send warnings to ${atRiskStudents.length} at-risk students?`)
+      !confirm(`Send ${methodText} to ${studentsToNotify.length} at-risk students?`)
     ) {
       return;
     }
@@ -148,18 +201,25 @@ export default function Reports() {
 
     try {
       const response = await api.post("/notifications/send-bulk-warnings", {
-        students: atRiskStudents.map((s) => ({
+        students: studentsToNotify.map((s) => ({
           id: s.id,
           fullName: s.fullName,
           attendanceRate: s.attendanceRate,
           course: s.course,
+          phoneNumber: s.phone,
         })),
+        sendMethod: sendMethod,
       });
 
       if (response.data.success) {
-        alert(
-          `✅ Sent ${response.data.success} warnings\n❌ Failed: ${response.data.failed}`,
-        );
+        let message = `✅ Sent: ${response.data.success}\n❌ Failed: ${response.data.failed}`;
+        if (response.data.smsSent !== undefined) {
+          message += `\n📱 SMS Sent: ${response.data.smsSent || 0}`;
+        }
+        if (response.data.pushSent !== undefined) {
+          message += `\n🔔 Push Sent: ${response.data.pushSent || 0}`;
+        }
+        alert(message);
       }
     } catch (error) {
       console.error("Error sending bulk warnings:", error);
@@ -170,10 +230,10 @@ export default function Reports() {
   };
 
   function exportCSV() {
-    const headers = "Student,RegNumber,Course,AttendanceRate,Status";
+    const headers = "Student,RegNumber,Course,AttendanceRate,Status,Phone,Email";
     const rows = students.map(
       (s) =>
-        `"${s.fullName}",${s.regNumber || ""},${s.course},${s.attendanceRate}%,${s.attendanceRate >= 75 ? "Good" : "At Risk"}`,
+        `"${s.fullName}",${s.regNumber || ""},${s.course},${s.attendanceRate}%,${s.attendanceRate >= 75 ? "Good" : "At Risk"},${s.phone || ""},${s.email || ""}`,
     );
     const csv = [headers, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -217,6 +277,58 @@ export default function Reports() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Notification Method Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMethodSelector(!showMethodSelector)}
+              className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2 text-sm"
+            >
+              {sendMethod === "push" && <Bell size={14} />}
+              {sendMethod === "sms" && <MessageCircle size={14} />}
+              {sendMethod === "both" && <Smartphone size={14} />}
+              <span>
+                {sendMethod === "push" && "Push Only"}
+                {sendMethod === "sms" && "SMS Only"}
+                {sendMethod === "both" && "Push + SMS"}
+              </span>
+            </button>
+            
+            {showMethodSelector && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                <button
+                  onClick={() => {
+                    setSendMethod("push");
+                    setShowMethodSelector(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 rounded-t-lg"
+                >
+                  <Bell size={14} />
+                  <span>Push Only</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSendMethod("sms");
+                    setShowMethodSelector(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <MessageCircle size={14} />
+                  <span>SMS Only</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSendMethod("both");
+                    setShowMethodSelector(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 rounded-b-lg"
+                >
+                  <Smartphone size={14} />
+                  <span>Push + SMS</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {atRisk.length > 0 && (
             <button
               onClick={handleSendBulkWarnings}
@@ -267,6 +379,16 @@ export default function Reports() {
         </div>
       </div>
 
+      {/* Notification method info banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700 flex items-center gap-2">
+        <Smartphone size={16} />
+        <span>
+          {sendMethod === "push" && "Sending push notifications only (requires mobile app)"}
+          {sendMethod === "sms" && "Sending SMS only (requires phone number)"}
+          {sendMethod === "both" && "Sending both push notifications and SMS for delivery redundancy"}
+        </span>
+      </div>
+
       {/* Chart */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
         <h3 className="font-semibold text-slate-800 mb-4">
@@ -296,52 +418,64 @@ export default function Reports() {
               At-Risk Students (below 75%)
             </h3>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="th">Student</th>
-                <th className="th">Course</th>
-                <th className="th">Attendance Rate</th>
-                <th className="th">Action Needed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {atRisk.map((s) => (
-                <tr key={s.id} className="border-b border-slate-50">
-                  <td className="td font-medium text-slate-800">
-                    {s.fullName}
-                  </td>
-                  <td className="td">
-                    <span className="badge badge-blue">{s.course}</span>
-                  </td>
-                  <td className="td">
-                    <span className="text-red-600 font-bold">
-                      {s.attendanceRate}%
-                    </span>
-                  </td>
-                  <td className="td">
-                    <button
-                      onClick={() => handleSendWarning(s)}
-                      disabled={sendingWarning === s.id}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {sendingWarning === s.id ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <Bell size={14} />
-                          Send Warning
-                        </>
-                      )}
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="th">Student</th>
+                  <th className="th">Course</th>
+                  <th className="th">Attendance Rate</th>
+                  <th className="th">Phone</th>
+                  <th className="th">Action Needed</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {atRisk.map((s) => (
+                  <tr key={s.id} className="border-b border-slate-50">
+                    <td className="td font-medium text-slate-800">
+                      {s.fullName}
+                    </td>
+                    <td className="td">
+                      <span className="badge badge-blue">{s.course}</span>
+                    </td>
+                    <td className="td">
+                      <span className="text-red-600 font-bold">
+                        {s.attendanceRate}%
+                      </span>
+                    </td>
+                    <td className="td">
+                      {s.phone ? (
+                        <span className="text-green-600 text-xs">{s.phone}</span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">No phone</span>
+                      )}
+                    </td>
+                    <td className="td">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleSendWarning(s)}
+                          disabled={sendingWarning === s.id}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {sendingWarning === s.id ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              {sendMethod === "sms" ? <MessageCircle size={14} /> : <Bell size={14} />}
+                              Send Warning
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -357,7 +491,7 @@ export default function Reports() {
               <th className="th">Date</th>
               <th className="th">Present / Total</th>
               <th className="th">Rate</th>
-            </tr>
+             </tr>
           </thead>
           <tbody>
             {closedSessions.map((s) => {
