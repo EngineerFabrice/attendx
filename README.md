@@ -40,16 +40,8 @@
 
 ## 🏗️ System Architecture
 ```bash
-┌─────────────────────────────────────────────────────────────┐
-│ AttendX System │
-├─────────────────────────────────────────────────────────────┤
-│ Frontend (Flutter) Backend (Node.js) Database │
-│ ├─ Student App ←→ Express REST API PostgreSQL │
-│ ├─ Lecturer App ←→ JWT Auth 15 tables │
-│ └─ Admin Web Dashboard ←→ Geofencing │
-├─────────────────────────────────────────────────────────────┤
-│ External Services: SMS Gateway (Africa's Talking/Twilio) │
-└─────────────────────────────────────────────────────────────┘
+<img width="1362" height="744" alt="image" src="https://github.com/user-attachments/assets/68bc8efb-6d01-4994-80e2-656aae9cc6a1" />
+
 ```
 
 ## 📁 Project Structure
@@ -185,37 +177,112 @@
         └───runner
             └───resources
 ```
+### Database Schema
 
-## 🗄️ Database Schema
+## Core Tables (12 tables)
 
-### Core Tables (15 tables)
-
-| Table                | Purpose                                        |
-| -------------------- | ---------------------------------------------- |
-| `users`              | Students, lecturers, admins                    |
-| `devices`            | Registered devices per user (fraud prevention) |
-| `courses`            | Course information                             |
-| `enrollments`        | Student-course relationships                   |
-| `classrooms`         | Geofence coordinates (lat, lng, radius)        |
-| `sessions`           | Lecture sessions with auto-expiring codes      |
-| `room_checkins`      | Student check-ins (GPS at entry)               |
-| `attendance_records` | Final attendance (present/absent)              |
-| `offline_queue`      | Offline submissions awaiting sync              |
-| `sms_logs`           | Incoming SMS audit trail                       |
-| `notifications`      | Push notification logs                         |
-| `notification_logs`  | Check-in notification eligibility              |
-
+Table	                   Purpose
+users	                   Students, lecturers, admins with role-based access
+device_tokens	           FCM push notification tokens per user
+courses	                   Course information with lecturer assignment
+enrollments	               Student-course relationships
+classrooms	               Geofence coordinates (latitude, longitude, radius)
+attendance_sessions	       Lecture sessions with auto-expiring check-in codes
+attendance_records	       Final attendance status (present/absent)
+attendance_warnings	       Log of absence warnings sent to students
+notification_preferences   User notification settings
+notifications	           Push notification logs
+password_reset_tokens	   Password reset request tracking
+refresh_tokens	          JWT refresh token storage
 ### Key Relationships
 
 ```sql
-users ──< enrollments >── courses ──< sessions
-users ──< devices
-sessions ──< room_checkins >── users
-sessions ──── classrooms (geofence)
-room_checkins ──> attendance_records (on session close)
-🔄 Attendance Flow (Room Check-in Method)
-
+users ──< enrollments >── courses ──< attendance_sessions
+  │                           │
+  │                           └──< classrooms (geofence)
+  │
+  ├──< device_tokens
+  ├──< notifications
+  ├──< attendance_records
+  └──< attendance_warnings
 ```
+### Attendance Flow (Location-based Check-in)
+```bash
+1. Lecturer creates session
+   └── attendance_sessions (status: 'active', generates unique code)
+
+2. Student checks in via mobile app
+   ├── Geofence validation (classroom.latitude, longitude, radius)
+   └── attendance_records (status: 'present', geofence_passed: boolean)
+
+3. Session expires or closed
+   ├── Auto-mark absent students
+   └── Send FCM notifications to absent students
+
+4. Warning system for at-risk students
+   ├── attendance_warnings (logged when attendance < 75%)
+   └── FCM push notifications sent to device_tokens
+```
+
+### Important Fields
+## users
+```bash
+id VARCHAR(36) PRIMARY KEY (UUID)
+role ENUM('admin', 'lecturer', 'student')
+reg_number VARCHAR(50) (students only)
+attendance_sessions
+status ENUM('active', 'closed')
+session_code VARCHAR(6) (auto-generated, 90-minute expiry)
+```
+## classrooms
+```bash
+latitude DECIMAL(10,8)
+longitude DECIMAL(11,8)
+radius_m INT (geofence radius in meters)
+attendance_warnings
+status ENUM('sent', 'delivered', 'read')
+Auto-generated UUID and timestamp
+```
+### Indexes for Performance
+
+```sql
+-- Optimized queries for reporting
+CREATE INDEX idx_attendance_rate ON attendance_records(status);
+CREATE INDEX idx_session_status ON attendance_sessions(status);
+CREATE INDEX idx_warning_sent ON attendance_warnings(sent_at);
+CREATE INDEX idx_user_role ON users(role, is_active);
+Sample Queries
+
+-- Get at-risk students (attendance < 75%)
+SELECT u.full_name, u.reg_number, 
+       ROUND(AVG(CASE WHEN ar.status = 'present' THEN 1 ELSE 0 END) * 100, 1) as attendance_rate
+FROM users u
+JOIN enrollments e ON u.id = e.student_id
+LEFT JOIN attendance_records ar ON u.id = ar.student_id
+GROUP BY u.id
+HAVING attendance_rate < 75;
+
+-- Get active sessions with geofence data
+SELECT s.*, c.name as course_name, cl.latitude, cl.longitude, cl.radius_m
+FROM attendance_sessions s
+JOIN courses c ON s.course_id = c.id
+JOIN classrooms cl ON s.classroom_id = cl.id
+WHERE s.status = 'active' AND s.expires_at > NOW();
+
+-- Get warning history for a student
+SELECT w.*, u.full_name, u.email
+FROM attendance_warnings w
+JOIN users u ON w.student_id = u.id
+WHERE w.student_id = 'student-uuid'
+ORDER BY w.sent_at DESC;
+```
+### Notes
+
+All UUIDs are generated using MySQL's UUID() function
+Timestamps use CURRENT_TIMESTAMP with automatic updates
+Foreign keys use ON DELETE CASCADE for data integrity
+Character set: utf8mb4 with utf8mb4_general_ci collation for emoji support
+
 <img width="1713" height="4137" alt="image" src="https://github.com/user-attachments/assets/61f0c3bf-0843-4bde-b81d-63fdaf941f1c" />
 
 
@@ -365,16 +432,111 @@ FCM_SERVER_KEY=your_fcm_server_key
 ```
 ### API Endpoints
 
-Method	Endpoint	Description
-POST	/api/auth/login	User login (student/lecturer/admin)
-POST	/api/sessions/start	Lecturer starts session
-POST	/api/sessions/:id/checkin	Student checks in (GPS required)
-GET	/api/sessions/:id/checkins	Live dashboard (who's in room)
-POST	/api/sessions/:id/close	Lecturer ends session
-POST	/api/attendance/sync	Offline sync endpoint
-POST	/api/sms/webhook	SMS gateway callback
-GET	/api/analytics/reports	Attendance reports
+## Authentication (/api/auth)
 
+# Method	                                     Endpoint	                                  Description
+
+POST	                                     /api/auth/login	                          User login (student/lecturer/admin)
+POST	                                     /api/auth/refresh	                          Refresh JWT access token
+
+## Lecturer Routes(/api/lecturer)
+
+# Method	                                    Endpoint	                                      Description
+
+GET	                                        /api/lecturer/dashboard	                          Lecturer dashboard statistics
+GET	                                        /api/lecturer/sessions	                          Get all sessions (active & closed)
+POST	                                    /api/lecturer/sessions/start	                  Start a new attendance session
+POST	                                    /api/lecturer/sessions/:id/close	              Close an active session
+GET	                                        /api/lecturer/sessions/:id/attendance	          Get attendance records for a session
+GET	                                        /api/lecturer/sessions/:id/enrolled-students	  Get all enrolled students for a session
+GET	                                        /api/lecturer/students	                          Get all students with attendance rates
+POST	                                    /api/lecturer/students	                          Create a new student
+GET	                                        /api/lecturer/courses	                          Get lecturer's courses
+GET	                                        /api/lecturer/classrooms	                      Get available classrooms with geofence
+
+## Student Routes (/api/student)
+
+# Method	                  Endpoint	                                      Description
+
+POST	                  /api/student/sessions/:code/checkin	          Student checks in with session code (GPS required)
+GET	                      /api/student/sessions	                          Get student's session history
+GET	                      /api/student/attendance	                      Get student's attendance records
+
+## Notifications (/api/notifications)
+
+# Method	                  Endpoint	                                     Description
+
+POST	                  /api/notifications/send-warning	             Send absence warning to a single student
+POST	                  /api/notifications/send-bulk-warnings	         Send warnings to multiple students
+GET	                      /api/notifications/warnings/:studentId	     Get warning history for a student
+
+## Admin Routes (/api/admin)
+
+# Method	                        Endpoint	                     Description
+
+GET	                            /api/admin/dashboard	         Admin dashboard statistics
+GET	                            /api/admin/users	             Manage system users
+GET	                            /api/admin/courses	             Manage courses
+GET	                            /api/admin/classrooms	         Manage classrooms
+
+## System
+
+## Method	                        Endpoint	              Description
+
+GET	                            /api/health	              Health check endpoint
+
+## Real-time WebSocket Events (Socket.IO)
+
+Events Emitted by Server
+
+## Event	                                         Direction	        Description
+
+session_started	                                 Server → Client	New session started for a course
+session_closed	                                 Server → Client	Session has been closed
+attendance_update	                             Server → Client	Real-time check-in notification
+
+## Events  Received by Server
+
+## Event	                        Direction	                 Description
+
+join_session	                Client → Server	             Join a session room for live updates
+join_course	                    Client → Server	             Join a course room for session notifications
+
+## Attendance Flow Diagram
+
+```bash
+<img width="1228" height="1192" alt="image" src="https://github.com/user-attachments/assets/b98b9f53-1a9c-49cd-b422-15b92bb413a7" />
+
+```
+
+## Authentication
+
+All protected routes require a Bearer token in the Authorization header:
+
+```text
+Authorization: Bearer <your_jwt_token>
+Tokens are obtained via /api/auth/login and can be refreshed using /api/auth/refresh.
+```
+## Response Format
+
+All API responses follow a consistent format:
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": { ... }
+}
+```
+Error:
+
+```json
+{
+  "success": false,
+  "error": "Error message here"
+}
+```
 ### Testing
 
 # Backend unit tests
