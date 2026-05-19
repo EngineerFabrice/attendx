@@ -299,7 +299,7 @@ async function getSessionAttendance(req, res, next) {
 async function getStudents(req, res, next) {
   try {
     const [rows] = await db.query(
-      `SELECT u.id, u.full_name, u.email, u.reg_number, c.code AS course,
+      `SELECT u.id, u.full_name, u.email, u.phone, u.reg_number, c.code AS course,
               ROUND(100 * SUM(r.status='present') / NULLIF(COUNT(r.id),0), 1) AS attendanceRate
          FROM users u
          JOIN enrollments en ON en.student_id = u.id
@@ -316,6 +316,7 @@ async function getStudents(req, res, next) {
           id: r.id,
           fullName: r.full_name,
           email: r.email,
+          phone: r.phone,
           regNumber: r.reg_number,
           course: r.course,
           attendanceRate: Number(r.attendanceRate) || 0,
@@ -413,7 +414,7 @@ async function getSessionEnrolledStudents(req, res, next) {
 
     // Get all enrolled students for this course
     const [students] = await db.query(
-      `SELECT u.id, u.full_name AS fullName, u.reg_number AS regNumber, u.email
+      `SELECT u.id, u.full_name AS fullName, u.reg_number AS regNumber, u.email, u.phone
        FROM users u
        JOIN enrollments e ON u.id = e.student_id
        WHERE e.course_id = ?
