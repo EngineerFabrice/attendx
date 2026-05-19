@@ -32,6 +32,7 @@ const adminRoutes = require("./src/routes/admin.routes");
 const lecturerRoutes = require("./src/routes/lecturer.routes");
 const studentRoutes = require("./src/routes/student.routes");
 const warningRoutes = require("./src/routes/warningRoutes");
+const smsRoutes = require("./src/routes/sms.routes");
 
 const app = express();
 const server = http.createServer(app);
@@ -64,8 +65,8 @@ app.set("io", io);
 
 // -- Middleware ----------------------------------------------------------------
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.urlencoded({ extended: true })); 
-app.use(express.json()); 
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 // CORS middleware - FIXED
 app.use(
   cors({
@@ -113,6 +114,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/lecturer", lecturerRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/notifications", warningRoutes);
+app.use("/api/sms", smsRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
@@ -141,7 +143,7 @@ async function start() {
   try {
     await testConnection();
     require("./src/services/fcm.service").init();
-
+    require("./src/services/sms.service").init();
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`\n AttendX API running on:`);
       console.log(`   Local: http://localhost:${PORT}`);
