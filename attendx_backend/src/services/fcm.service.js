@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const db = require("../config/database");
+const { v4: uuidv4 } = require("uuid");
 
 let messaging = null; // firebase-admin messaging instance
 
@@ -63,7 +64,6 @@ function init() {
   }
 }
 
-// Rest of your existing functions remain the same...
 async function getTokens(userIds) {
   if (!userIds.length) return [];
   const placeholders = userIds.map(() => "?").join(",");
@@ -176,9 +176,80 @@ async function notifyAttendanceConfirmed(studentId, courseName) {
   }
 }
 
+async function notifyAbsenceWarning({
+  studentId,
+  studentName,
+  attendanceRate,
+  courseName,
+}) {
+  try {
+    console.log(`[FCM] Sending warning to ${studentName} (${studentId})`);
+    console.log(`[FCM] Attendance: ${attendanceRate}%, Course: ${courseName}`);
+
+    const tokens = await getTokens([studentId]);
+    if (!tokens.length) {
+      console.warn(`[FCM] No FCM token found for student ${studentId}`);
+      // Still log the warning even if no token
+    } else {
+      await sendMulticast(tokens, {
+        title: "⚠️ Attendance Warning",
+        body: `${studentName}, your attendance in ${courseName} is ${attendanceRate}%. Please attend more classes to avoid penalties.`,
+        data: {
+          type: "absence_warning",
+          studentId: String(studentId),
+          attendanceRate: String(attendanceRate),
+          courseName: courseName,
+          action: "view_attendance",
+        },
+      });
+      console.log(
+        `[FCM] Absence warning sent to ${studentName} (${attendanceRate}%)`,
+      );
+    }
+
+    // Log the warning in database - FIXED: Correct number of parameters
+    const warningId = uuidv4();
+    await db.query(
+      `INSERT INTO attendance_warnings (id, student_id, course_name, attendance_rate, sent_at, status) 
+       VALUES (?, ?, ?, ?, NOW(), 'sent')`,
+      [warningId, studentId, courseName, attendanceRate],
+    );
+    console.log(`[FCM] Warning logged to database with ID: ${warningId}`);
+  } catch (e) {
+    console.error("[FCM] notifyAbsenceWarning error:", e.message);
+    throw e;
+  }
+}
+
+async function notifyBulkAbsenceWarnings(students) {
+  const results = { success: 0, failed: 0 };
+
+  for (const student of students) {
+    try {
+      await notifyAbsenceWarning({
+        studentId: student.id,
+        studentName: student.fullName,
+        attendanceRate: student.attendanceRate,
+        courseName: student.course,
+      });
+      results.success++;
+
+      // Add delay to avoid overwhelming the system
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (e) {
+      console.warn(`[FCM] Failed to send to ${student.fullName}:`, e.message);
+      results.failed++;
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   init,
   notifySessionStarted,
   notifyAbsentStudents,
   notifyAttendanceConfirmed,
+  notifyAbsenceWarning,
+  notifyBulkAbsenceWarnings,
 };
