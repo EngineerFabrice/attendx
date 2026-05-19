@@ -1,4 +1,4 @@
-# 📱 AttendX - Smart Hybrid Attendance Management System
+# AttendX - Smart Hybrid Attendance Management System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Flutter](https://img.shields.io/badge/Flutter-3.22+-blue.svg)](https://flutter.dev)
@@ -7,20 +7,20 @@
 
 > A secure, real-time, and inclusive attendance system with geolocation verification, session-based codes, and hybrid submission methods (mobile app, SMS, offline sync).
 
-## 🎓 Project Information
+## Project Information
 
 **Academic Year:** 2025-2026 | **Year:** III | **Module:** Mobile Applications Systems and Design
 
 **University of Rwanda** - College of Science & Technology - School of ICT - Department of Computer & Software Engineering
 
-### 👥 Team Members
+### Team Members
 
 | Name              | Registration Number |
 | ----------------- | ------------------- |
 | Fabrice NDAYISABA | 223008047           |
 | Silas HAKUZWIMANA | 223001019           |
 
-## 🚀 Features
+## Features
 
 ### Core Capabilities
 
@@ -39,7 +39,7 @@
 - Auto-expiring session codes with server-side validation
 
 ## 🏗️ System Architecture
-
+```bash
 ┌─────────────────────────────────────────────────────────────┐
 │ AttendX System │
 ├─────────────────────────────────────────────────────────────┤
@@ -50,73 +50,141 @@
 ├─────────────────────────────────────────────────────────────┤
 │ External Services: SMS Gateway (Africa's Talking/Twilio) │
 └─────────────────────────────────────────────────────────────┘
-
-text
+```
 
 ## 📁 Project Structure
-
-attendx/
-├── attendx_student_app/ # Flutter student mobile app
-│ ├── lib/
-│ │ ├── screens/
-│ │ │ ├── checkin_screen.dart
-│ │ │ ├── attendance_history.dart
-│ │ │ └── profile_screen.dart
-│ │ ├── services/
-│ │ │ ├── api_service.dart
-│ │ │ ├── geolocation_service.dart
-│ │ │ └── local_storage.dart (offline sync)
-│ │ └── models/
-│ └── pubspec.yaml
-│
-├── attendx_lecturer/ # Flutter lecturer app
-│ ├── lib/
-│ │ ├── screens/
-│ │ │ ├── start_session.dart
-│ │ │ ├── live_dashboard.dart
-│ │ │ └── reports_screen.dart
-│ │ └── services/
-│ └── pubspec.yaml
-│
-├── attendx_admin/ # React/Flutter web admin dashboard
-│ ├── src/
-│ │ ├── pages/
-│ │ │ ├── Dashboard.jsx
-│ │ │ ├── ManageCourses.jsx
-│ │ │ ├── ManageUsers.jsx
-│ │ │ └── Analytics.jsx
-│ │ └── components/
-│ └── package.json
-│
-├── attendx_backend/ # Node.js + Express backend
-│ ├── src/
-│ │ ├── modules/
-│ │ │ ├── auth/ # JWT authentication
-│ │ │ ├── users/ # User management
-│ │ │ ├── courses/ # Course management
-│ │ │ ├── sessions/ # Session & check-in logic
-│ │ │ ├── attendance/ # Attendance records
-│ │ │ ├── devices/ # Device registration
-│ │ │ ├── sms/ # SMS webhook handler
-│ │ │ └── analytics/ # Reports & insights
-│ │ ├── config/
-│ │ │ ├── db.js # PostgreSQL pool
-│ │ │ └── constants.js # Geofence radius, code TTL
-│ │ ├── shared/
-│ │ │ ├── utils/
-│ │ │ │ └── geofence.util.js # Haversine formula
-│ │ │ └── middlewares/
-│ │ └── app.js
-│ ├── migrations/ # SQL schema files
-│ ├── .env
-│ └── package.json
-│
-└── docs/ # Documentation
-├── API_REFERENCE.md
-├── DATABASE_SCHEMA.md
-└── DEPLOYMENT_GUIDE.md
-
-text
+```bash
+├───attendx_admin
+│   ├───public
+│   └───src
+│       ├───assets
+│       ├───components
+│       ├───context
+│       ├───pages
+│       └───services
+├───attendx_backend
+│   ├───database
+│   ├───scripts
+│   └───src
+│       ├───config
+│       ├───controllers
+│       ├───middleware
+│       ├───routes
+│       ├───services
+│       ├───socket
+│       └───utils
+├───attendx_lecturer
+│   ├───public
+│   └───src
+│       ├───assets
+│       ├───components
+│       ├───context
+│       ├───pages
+│       └───services
+└───attendx_student_app
+    ├───.vscode
+    ├───android
+    │   ├───app
+    │   │   └───src
+    │   │       ├───debug
+    │   │       ├───main
+    │   │       │   ├───kotlin
+    │   │       │   │   └───com
+    │   │       │   │       └───example
+    │   │       │   │           └───attendx_student_app
+    │   │       │   └───res
+    │   │       │       ├───drawable
+    │   │       │       ├───drawable-v21
+    │   │       │       ├───mipmap-hdpi
+    │   │       │       ├───mipmap-mdpi
+    │   │       │       ├───mipmap-xhdpi
+    │   │       │       ├───mipmap-xxhdpi
+    │   │       │       ├───mipmap-xxxhdpi
+    │   │       │       ├───values
+    │   │       │       └───values-night
+    │   │       └───profile
+    │   └───gradle
+    │       └───wrapper
+    ├───ios
+    │   ├───Flutter
+    │   ├───Runner
+    │   │   ├───Assets.xcassets
+    │   │   │   ├───AppIcon.appiconset
+    │   │   │   └───LaunchImage.imageset
+    │   │   └───Base.lproj
+    │   ├───Runner.xcodeproj
+    │   │   ├───project.xcworkspace
+    │   │   │   └───xcshareddata
+    │   │   └───xcshareddata
+    │   │       └───xcschemes
+    │   ├───Runner.xcworkspace
+    │   │   └───xcshareddata
+    │   └───RunnerTests
+    ├───lib
+    │   ├───app
+    │   ├───core
+    │   │   ├───constants
+    │   │   ├───network
+    │   │   ├───services
+    │   │   ├───storage
+    │   │   └───utils
+    │   ├───features
+    │   │   ├───analytics
+    │   │   │   ├───data
+    │   │   │   └───presentation
+    │   │   │       ├───providers
+    │   │   │       └───widgets
+    │   │   ├───auth
+    │   │   │   ├───data
+    │   │   │   ├───domain
+    │   │   │   └───presentation
+    │   │   │       └───providers
+    │   │   ├───checkin
+    │   │   │   ├───data
+    │   │   │   └───presentation
+    │   │   │       └───providers
+    │   │   ├───dashboard
+    │   │   │   ├───data
+    │   │   │   └───presentation
+    │   │   │       ├───providers
+    │   │   │       └───widgets
+    │   │   ├───history
+    │   │   │   ├───data
+    │   │   │   └───presentation
+    │   │   │       ├───providers
+    │   │   │       └───widgets
+    │   │   └───profile
+    │   │       └───presentation
+    │   │           └───widgets
+    │   └───shared
+    │       ├───theme
+    │       └───widgets
+    ├───linux
+    │   ├───flutter
+    │   └───runner
+    ├───macos
+    │   ├───Flutter
+    │   ├───Runner
+    │   │   ├───Assets.xcassets
+    │   │   │   └───AppIcon.appiconset
+    │   │   ├───Base.lproj
+    │   │   └───Configs
+    │   ├───Runner.xcodeproj
+    │   │   ├───project.xcworkspace
+    │   │   │   └───xcshareddata
+    │   │   └───xcshareddata
+    │   │       └───xcschemes
+    │   ├───Runner.xcworkspace
+    │   │   └───xcshareddata
+    │   └───RunnerTests
+    ├───test
+    ├───web
+    │   └───icons
+    └───windows
+        ├───flutter
+        └───runner
+            └───resources
+```
 
 ## 🗄️ Database Schema
 
@@ -147,142 +215,126 @@ sessions ──── classrooms (geofence)
 room_checkins ──> attendance_records (on session close)
 🔄 Attendance Flow (Room Check-in Method)
 
+```
+<img width="1713" height="4137" alt="image" src="https://github.com/user-attachments/assets/61f0c3bf-0843-4bde-b81d-63fdaf941f1c" />
 
 
+### Tech Stack
 
+## Frontend (Mobile)
 
-
-
-
-
-
-
-
-
-
-🛠️ Tech Stack
-Frontend (Mobile)
 Framework: Flutter 3.22+ (Dart)
-
 State Management: Provider / Riverpod
-
 Geolocation: geolocator package
-
 Local Storage: Hive (offline sync)
-
 HTTP Client: Dio
 
-Backend
+## Backend
+
 Runtime: Node.js 20.x
-
 Framework: Express.js
-
 Authentication: JWT (jsonwebtoken)
-
 Validation: Joi/Zod
-
 Scheduling: node-cron (session expiry)
-
 Geofencing: Haversine formula (server-side)
 
-Database
-Primary: PostgreSQL 15+
+## Database
 
-Migrations: node-pg-migrate
-
-Driver: pg (node-postgres)
-
+Primary: MySQL
 SMS Gateway
-Africa's Talking / Twilio (webhook integration)
+Twilio
 
-📋 Prerequisites
+### Prerequisites
+
 Flutter: 3.22+ (Installation Guide)
-
 Node.js: 20.x or higher
-
-PostgreSQL: 15 or higher
-
+MySQL
 Android Studio (for emulator testing)
-
 Git
 
-🔧 Installation
+### Installation
+
 1. Clone the repository
-bash
+```bash
 git clone https://github.com/EngineerFabrice/attendx.git
+```
+```bash
 cd attendx
+```
 2. Backend Setup
-bash
+```bash
 cd attendx_backend
-
+```
 # Install dependencies
-npm install
-
+```bash
+pnpm install
+```
 # Copy environment variables
+```bash
 cp .env.example .env
-
+```
 # Edit .env with your credentials
 # DB_HOST, DB_USER, DB_PASSWORD, JWT_SECRET, SMS_API_KEY, etc.
 
 # Run database migrations
-npm run migrate
-
+```bash
+pnpm run migrate
+```
 # Seed initial data (classrooms, admin user)
+```bash
 npm run seed
-
+```
 # Start development server
+```bsh
 npm run dev
+```
 3. Student App Setup
-bash
+```bash
 cd ../attendx_student_app
-
+```
 # Get Flutter packages
+```bash
 flutter pub get
-
+```
 # Run the app
+```bash
 flutter run
+```
 4. Lecturer App Setup
-bash
+```bash
 cd ../attendx_lecturer
 flutter pub get
 flutter run
+```
 5. Admin Dashboard Setup
-bash
+```bash
 cd ../attendx_admin
 npm install
 npm run dev
-📱 Android Emulator Configuration
-System Requirements (Your Setup)
-CPU: Intel Core i7-1255U ✅
+```
+## Android Emulator Configuration
 
-RAM: 16GB ✅
-
-Graphics: Intel Iris Xe ✅
-
-Storage: 243GB free ✅
-
-Emulator Setup
-bash
 # List available emulators
+```bash
 flutter emulators
-
+```
 # Create AVD (if needed)
+```bash
 avdmanager create avd -n attendx_device -k "system-images;android-35;google_apis;x86_64"
-
+```
 # Launch emulator
+```bash
 flutter emulators --launch attendx_device
-
+```
 # Run app on emulator
+```bash
 flutter run
-Enable Hardware Acceleration (Intel HAXM)
-bash
-# Check if virtualization is enabled
-# Task Manager → Performance → CPU → Virtualization: Enabled
+```
 
-# If disabled, enable in BIOS:
-# Reboot → Press F2/Del → Enable Intel VT-x → Save & Exit
-🔐 Environment Variables
+### Environment Variables
+
 Backend (.env)
+```bash
 env
 # Server
 PORT=3000
@@ -310,7 +362,9 @@ SMS_WEBHOOK_SECRET=your_webhook_secret
 
 # Push Notifications (FCM)
 FCM_SERVER_KEY=your_fcm_server_key
-📡 API Endpoints (Key Examples)
+```
+### API Endpoints
+
 Method	Endpoint	Description
 POST	/api/auth/login	User login (student/lecturer/admin)
 POST	/api/sessions/start	Lecturer starts session
@@ -320,71 +374,92 @@ POST	/api/sessions/:id/close	Lecturer ends session
 POST	/api/attendance/sync	Offline sync endpoint
 POST	/api/sms/webhook	SMS gateway callback
 GET	/api/analytics/reports	Attendance reports
-🧪 Testing
-bash
+
+### Testing
+
 # Backend unit tests
+```bash
 cd attendx_backend
 npm test
-
+```
 # Flutter widget tests
+```bash
 cd attendx_student_app
 flutter test
-
+```
 # Integration tests
+```bash
 npm run test:integration
+```
 📊 Sample Geofence Data
-sql
+```sql
 INSERT INTO classrooms (name, latitude, longitude, radius_m) VALUES
 ('LT-1', -1.9441, 30.0619, 80),   -- Large theatre
 ('LT-3', -1.9455, 30.0631, 50),   -- Standard lecture hall
 ('Seminar A', -1.9460, 30.0640, 20), -- Small room
 ('Exam Tent', -1.9430, 30.0600, 100); -- Outdoor space
-🚢 Deployment
+```
+### Deployment
 Backend (Render.com / Heroku)
-bash
-# Push to production branch
-git push production main
 
+### Push to production branch
+```bash
+git push production main
+```
 # Run migrations automatically
+```bash
 npm run migrate:prod
-Mobile Apps (Play Store / Internal Distribution)
-bash
+```
+
+## Mobile Apps (Play Store / Internal Distribution)
+
 # Build Android APK
+```bash
 cd attendx_student_app
 flutter build apk --release
-
+```
 # Build iOS (requires macOS)
+```bash
 flutter build ios --release
-🤝 Contributing
-Create a feature branch: git checkout -b feature/amazing-feature
+```
+### Contributing
 
-Commit changes: git commit -m 'Add amazing feature'
-
-Push: git push origin feature/amazing-feature
-
+Create a feature branch: 
+```bash
+git checkout -b feature/amazing-feature
+```
+Commit changes: 
+```bash
+git commit -m 'Add amazing feature'
+```
+Push: 
+```bash
+git push origin feature/amazing-feature
+```
 Open a Draft Pull Request on GitHub
 
 Request review from team members
 
-📄 License
+### License
+
 This project is part of academic coursework at the University of Rwanda.
 MIT License - see LICENSE file for details.
 
-🙏 Acknowledgments
-Supervisor: [Lecturer Name]
+### Acknowledgments
+Supervisor: Lect. Dieudonne UKURIKIYEYESU
 
 University of Rwanda - Department of Computer & Software Engineering
 
 Flutter & Node.js Open Source Communities
 
-Africa's Talking - SMS Gateway
+Twillio - SMS Gateway
 
-📞 Support
+### Support
+
 For issues or questions:
 
-Create an Issue
+## Create an Issue
 
-Contact team members via university email
+Contact team members via university email [hakuzwimana_223001019@stud.ur.ac.rw](hakuzwimana_223001019@stud.ur.ac.rw) || [ndayisaba_223001019@stud.ur.ac.rw](ndayisaba_223001019@stud.ur.ac.rw)
 
-Documentation: /docs folder
-```
+
