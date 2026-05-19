@@ -1,9 +1,13 @@
 const path = require("path");
 const fs = require("fs");
 const db = require("../config/database");
+const smsService = require("./sms.service"); // For fallback SMS notifications if FCM fails
 const { v4: uuidv4 } = require("uuid");
 
 let messaging = null; // firebase-admin messaging instance
+
+// Initialize SMS service
+smsService.init();
 
 function init() {
   if (messaging) return messaging;
@@ -103,9 +107,9 @@ async function sendMulticast(tokens, { title, body, data = {} }) {
       });
       const failed = result.responses.filter((r) => !r.success).length;
       if (failed)
-        console.warn(`[FCM] ${failed}/${chunk.length} messages failed`);
+        console.warn(`[FCM/SMS] ${failed}/${chunk.length} messages failed`);
     } catch (e) {
-      console.warn("[FCM] sendEachForMulticast error:", e.message);
+      console.warn("[FCM/SMS] sendEachForMulticast error:", e.message);
     }
   }
 }
@@ -118,23 +122,55 @@ async function notifySessionStarted({
   sessionCode,
 }) {
   try {
+    // Get enrolled students with their phone numbers
     const [rows] = await db.query(
-      "SELECT student_id FROM enrollments WHERE course_id = ?",
+      `SELECT e.student_id, u.phone, u.full_name 
+       FROM enrollments e
+       JOIN users u ON u.id = e.student_id
+       WHERE e.course_id = ? AND u.phone IS NOT NULL`,
       [courseId],
     );
+
     const tokens = await getTokens(rows.map((r) => r.student_id));
-    await sendMulticast(tokens, {
-      title: "Session Started",
-      body: `${courseName} in ${room} — tap to check in`,
-      data: {
-        type: "session_started",
-        sessionId,
-        courseId,
-        courseName,
-        room,
-        sessionCode,
-      },
-    });
+    if (tokens.length > 0) {
+      await sendMulticast(tokens, {
+        title: "Session Started",
+        body: `${courseName} in ${room} — tap to check in`,
+        data: {
+          type: "session_started",
+          sessionId,
+          courseId,
+          courseName,
+          room,
+          sessionCode,
+        },
+      });
+    }
+
+    // Send SMS to students without tokens but with phone numbers
+    const studentsWithoutTokens = rows.filter(
+      (r) => !tokens.includes(r.student_id),
+    );
+    for (const student of studentsWithoutTokens) {
+      if (student.phone) {
+        try {
+          await smsService.sendSessionReminderSMS({
+            phoneNumber: student.phone,
+            studentName: student.full_name,
+            courseName,
+            room,
+            sessionCode,
+          });
+          // Rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (smsError) {
+          console.error(
+            `[SMS] Failed to send session reminder to ${student.full_name}:`,
+            smsError.message,
+          );
+        }
+      }
+    }
   } catch (e) {
     console.warn("[FCM] notifySessionStarted:", e.message);
   }
@@ -153,11 +189,13 @@ async function notifyAbsentStudents({ sessionId, courseId }) {
     if (!rows.length) return;
     const courseName = rows[0].courseName;
     const tokens = await getTokens(rows.map((r) => r.student_id));
-    await sendMulticast(tokens, {
-      title: "Absence Recorded",
-      body: `You were marked absent for ${courseName}`,
-      data: { type: "absence_warning", sessionId, courseId, courseName },
-    });
+    if (tokens.length > 0) {
+      await sendMulticast(tokens, {
+        title: "Absence Recorded",
+        body: `You were marked absent for ${courseName}`,
+        data: { type: "absence_warning", sessionId, courseId, courseName },
+      });
+    }
   } catch (e) {
     console.warn("[FCM] notifyAbsentStudents:", e.message);
   }
@@ -183,14 +221,22 @@ async function notifyAbsenceWarning({
   courseName,
 }) {
   try {
-    console.log(`[FCM] Sending warning to ${studentName} (${studentId})`);
-    console.log(`[FCM] Attendance: ${attendanceRate}%, Course: ${courseName}`);
+    console.log(`[FCM/SMS] Sending warning to ${studentName} (${studentId})`);
+    console.log(
+      `[FCM/SMS] Attendance: ${attendanceRate}%, Course: ${courseName}`,
+    );
+
+    // Get student phone number for SMS fallback
+    const [studentRows] = await db.query(
+      "SELECT phone, email FROM users WHERE id = ?",
+      [studentId],
+    );
+    const studentPhone = studentRows[0]?.phone;
 
     const tokens = await getTokens([studentId]);
-    if (!tokens.length) {
-      console.warn(`[FCM] No FCM token found for student ${studentId}`);
-      // Still log the warning even if no token
-    } else {
+    let fcmSent = false;
+
+    if (tokens.length > 0) {
       await sendMulticast(tokens, {
         title: "⚠️ Attendance Warning",
         body: `${studentName}, your attendance in ${courseName} is ${attendanceRate}%. Please attend more classes to avoid penalties.`,
@@ -203,8 +249,33 @@ async function notifyAbsenceWarning({
         },
       });
       console.log(
-        `[FCM] Absence warning sent to ${studentName} (${attendanceRate}%)`,
+        `[FCM/SMS] Absence warning sent to ${studentName} (${attendanceRate}%)`,
       );
+      fcmSent = true;
+    } else {
+      console.warn(`[FCM/SMS] No FCM token found for student ${studentId}`);
+    }
+
+    // Send SMS as fallback if student has phone number
+    let smsSent = false;
+    if (studentPhone) {
+      try {
+        await smsService.sendAbsenceWarningSMS({
+          phoneNumber: studentPhone,
+          studentName,
+          attendanceRate,
+          courseName,
+        });
+        smsSent = true;
+        console.log(`[SMS] SMS sent to ${studentName} at ${studentPhone}`);
+      } catch (smsError) {
+        console.error(
+          `[SMS] Failed to send SMS to ${studentName}:`,
+          smsError.message,
+        );
+      }
+    } else {
+      console.log(`[SMS] No phone number for ${studentName}`);
     }
 
     // Log the warning in database - FIXED: Correct number of parameters
@@ -214,9 +285,10 @@ async function notifyAbsenceWarning({
        VALUES (?, ?, ?, ?, NOW(), 'sent')`,
       [warningId, studentId, courseName, attendanceRate],
     );
-    console.log(`[FCM] Warning logged to database with ID: ${warningId}`);
+    console.log(`[FCM/SMS] Warning logged to database with ID: ${warningId}`);
+    console.log(`[FCM/SMS] Delivery: FCM=${fcmSent}, SMS=${smsSent}`);
   } catch (e) {
-    console.error("[FCM] notifyAbsenceWarning error:", e.message);
+    console.error("[FCM/SMS] notifyAbsenceWarning error:", e.message);
     throw e;
   }
 }
@@ -237,7 +309,10 @@ async function notifyBulkAbsenceWarnings(students) {
       // Add delay to avoid overwhelming the system
       await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (e) {
-      console.warn(`[FCM] Failed to send to ${student.fullName}:`, e.message);
+      console.warn(
+        `[FCM/SMS] Failed to send to ${student.fullName}:`,
+        e.message,
+      );
       results.failed++;
     }
   }
