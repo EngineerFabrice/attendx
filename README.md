@@ -39,10 +39,9 @@
 - Auto-expiring session codes with server-side validation
 
 ## 🏗️ System Architecture
-```bash
+
 <img width="1362" height="744" alt="image" src="https://github.com/user-attachments/assets/68bc8efb-6d01-4994-80e2-656aae9cc6a1" />
 
-```
 
 ## 📁 Project Structure
 ```bash
@@ -284,7 +283,6 @@ Foreign keys use ON DELETE CASCADE for data integrity
 Character set: utf8mb4 with utf8mb4_general_ci collation for emoji support
 
 <img width="1713" height="4137" alt="image" src="https://github.com/user-attachments/assets/61f0c3bf-0843-4bde-b81d-63fdaf941f1c" />
-
 
 ### Tech Stack
 
