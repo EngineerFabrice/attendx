@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Flutter](https://img.shields.io/badge/Flutter-3.22+-blue.svg)](https://flutter.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15.x-blue.svg)](https://postgresql.org)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0.45-blue.svg)](https://mysql.com)
 
 > A secure, real-time, and inclusive attendance system with geolocation verification, session-based codes, and hybrid submission methods (mobile app, SMS, offline sync).
 
